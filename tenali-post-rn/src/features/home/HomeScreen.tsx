@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Linking,
   ScrollView,
@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AppColors, AppStyles } from '../../core/theme';
-import { AppConstants } from '../../core/constants';
+import { DataSync } from '../../core/utils/dataSync';
+import { Exam } from '../../models';
+import { DataService } from '../../services/dataService';
 import { useAuth } from '../../providers/AuthContext';
 import { useLmsAdmin } from '../../providers/LmsAdminContext';
 import { useNotifications } from '../../providers/NotificationContext';
@@ -25,11 +27,35 @@ export const HomeScreen: React.FC<Props> = ({ onSelectTab }) => {
   const { user, isAdmin } = useAuth();
   const { settings, loadPublicSettings } = useLmsAdmin();
   const { loadAnnouncements } = useNotifications();
+  const [exams, setExams] = useState<Exam[]>([]);
 
-  useEffect(() => {
+  const refreshHome = useCallback(async () => {
     loadPublicSettings();
     loadAnnouncements(user?.id, isAdmin);
-  }, []);
+    const list = await DataService.getExams();
+    setExams(list);
+  }, [user?.id, isAdmin]);
+
+  useEffect(() => {
+    refreshHome();
+    return DataSync.subscribe((topic) => {
+      if (
+        topic === 'all' ||
+        topic === 'settings' ||
+        topic === 'exams' ||
+        topic === 'announcements' ||
+        topic === 'mcq'
+      ) {
+        refreshHome();
+      }
+    });
+  }, [refreshHome]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshHome();
+    }, [refreshHome])
+  );
 
   if (settings.maintenanceMode && !isAdmin) {
     return (
@@ -149,7 +175,7 @@ export const HomeScreen: React.FC<Props> = ({ onSelectTab }) => {
         </TouchableOpacity>
       </View>
       <View style={{ gap: 10 }}>
-        {AppConstants.exams.map((ex) => (
+        {exams.map((ex) => (
           <TouchableOpacity
             key={ex.id}
             style={[AppStyles.card, styles.examRow]}

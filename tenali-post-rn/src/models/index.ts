@@ -249,9 +249,30 @@ export function studyNoteFromJson(json: Record<string, any>): StudyNote {
   };
 }
 
+export interface VideoFolder {
+  id: string;
+  examId: string;
+  name: string;
+  description?: string | null;
+  displayOrder: number;
+  createdAt?: string;
+}
+
+export function videoFolderFromJson(json: Record<string, any>): VideoFolder {
+  return {
+    id: String(json.id ?? ''),
+    examId: String(json.exam_id ?? json.examId ?? 'mts'),
+    name: String(json.name ?? ''),
+    description: json.description ?? null,
+    displayOrder: Number(json.display_order ?? json.displayOrder ?? 0),
+    createdAt: json.created_at ? String(json.created_at) : undefined,
+  };
+}
+
 export interface VideoLesson {
   id: string;
   examId: string;
+  folderId?: string | null;
   chapterId?: string | null;
   title: string;
   description: string;
@@ -260,20 +281,23 @@ export interface VideoLesson {
   duration: string;
   languageCode: string;
   isFree: boolean;
+  displayOrder?: number;
 }
 
 export function videoLessonFromJson(json: Record<string, any>): VideoLesson {
   return {
     id: String(json.id ?? ''),
-    examId: String(json.exam_id ?? ''),
-    chapterId: json.chapter_id ?? null,
+    examId: String(json.exam_id ?? json.examId ?? 'mts'),
+    folderId: json.folder_id ?? json.folderId ?? null,
+    chapterId: json.chapter_id ?? json.chapterId ?? null,
     title: String(json.title ?? ''),
     description: String(json.description ?? ''),
-    videoUrl: String(json.video_url ?? ''),
-    thumbnailUrl: json.thumbnail_url ?? null,
-    duration: String(json.duration ?? '15:00'),
-    languageCode: String(json.language_code ?? 'te'),
+    videoUrl: String(json.video_url ?? json.youtube_url ?? json.videoUrl ?? ''),
+    thumbnailUrl: json.thumbnail_url ?? json.thumbnailUrl ?? null,
+    duration: String(json.duration ?? 'Video'),
+    languageCode: String(json.language_code ?? json.language ?? json.languageCode ?? 'te'),
     isFree: json.is_free !== false,
+    displayOrder: Number(json.display_order ?? json.displayOrder ?? 0),
   };
 }
 

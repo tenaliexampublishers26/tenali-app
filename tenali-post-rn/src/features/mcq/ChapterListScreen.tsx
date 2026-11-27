@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,9 +8,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { AppColors, AppStyles } from '../../core/theme';
 import { AppConstants } from '../../core/constants';
+import { DataSync } from '../../core/utils/dataSync';
 import { TenaliTopAppBar } from '../../shared/TenaliTopAppBar';
 import { useMcq } from '../../providers/McqContext';
 import { Chapter, Exam } from '../../models';
@@ -19,8 +20,23 @@ export const ChapterListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const exam: Exam | undefined = route.params?.exam;
-  const { chapters, isLoading, selectChapterAndLanguage } = useMcq();
+  const { chapters, isLoading, selectExam, selectChapterAndLanguage } = useMcq();
   const [selectedLang, setSelectedLang] = useState<'en' | 'te' | 'hi'>('en');
+
+  useFocusEffect(
+    useCallback(() => {
+      if (exam) selectExam(exam);
+    }, [exam?.id])
+  );
+
+  useEffect(() => {
+    if (!exam) return;
+    return DataSync.subscribe((topic) => {
+      if (topic === 'all' || topic === 'mcq' || topic === 'exams') {
+        selectExam(exam);
+      }
+    });
+  }, [exam?.id]);
 
   const handleOpenChapter = async (chapter: Chapter) => {
     await selectChapterAndLanguage(chapter, selectedLang);

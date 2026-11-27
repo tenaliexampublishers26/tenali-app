@@ -1,35 +1,47 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DataSync } from '../core/utils/dataSync';
 import { Announcement, announcementFromJson } from '../models';
+import { AuthService } from './authService';
 import { SupabaseService } from './supabaseService';
 
-class AnnouncementServiceClass {
-  private _localAnnouncements: Announcement[] = [
-    {
-      id: 'ann-01',
-      title: 'Welcome to Tenali Post Preparation Portal',
-      message:
-        'Prepare with confidence for India Post MTS, Postman, Mail Guard, and PA/SA departmental examinations. Complete your profile to access all practice features.',
-      isPublished: true,
-      publishedAt: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-      isRead: false,
-    },
-    {
-      id: 'ann-02',
-      title: 'Upcoming Weekly All-India Live Mock Test',
-      message:
-        'The next Live Postal Examination will be conducted this Sunday. Ensure you review the updated Post Office Guide Part 1 syllabus notes.',
-      isPublished: true,
-      publishedAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-      createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-      isRead: false,
-    },
-  ];
+const ANNOUNCEMENTS_STORAGE_KEY = 'tenali_post_announcements_v1';
 
+class AnnouncementServiceClass {
+  private _localAnnouncements: Announcement[] = [];
   private _localReadIds = new Set<string>();
+  private _hydrated = false;
+
+  private async _hydrate(): Promise<void> {
+    if (this._hydrated) return;
+    this._hydrated = true;
+    try {
+      const raw = await AsyncStorage.getItem(ANNOUNCEMENTS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this._localAnnouncements = parsed.map((a) => announcementFromJson(a));
+        }
+      }
+    } catch {
+      // ignore hydration errors
+    }
+  }
+
+  private async _persist(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(
+        ANNOUNCEMENTS_STORAGE_KEY,
+        JSON.stringify(this._localAnnouncements)
+      );
+    } catch {
+      // ignore persist errors
+    }
+  }
 
   async fetchAnnouncements(userId?: string | null, isAdmin = false): Promise<Announcement[]> {
+    await this._hydrate();
     const client = SupabaseService.client;
-    if (!client) {
+    if (!client || AuthService.isLocalSession) {
       return this._getLocalAnnouncements(isAdmin);
     }
 
@@ -74,7 +86,7 @@ class AnnouncementServiceClass {
   async markAsRead(announcementId: string, userId: string): Promise<void> {
     this._localReadIds.add(announcementId);
     const client = SupabaseService.client;
-    if (!client || !userId) return;
+    if (!client || !userId || AuthService.isLocalSession) return;
 
     try {
       await client.from('announcement_reads').upsert({
@@ -90,7 +102,7 @@ class AnnouncementServiceClass {
   async markAllAsRead(announcementIds: string[], userId: string): Promise<void> {
     announcementIds.forEach((id) => this._localReadIds.add(id));
     const client = SupabaseService.client;
-    if (!client || !userId || !announcementIds.length) return;
+    if (!client || !userId || !announcementIds.length || AuthService.isLocalSession) return;
 
     try {
       const now = new Date().toISOString();
@@ -111,6 +123,7 @@ class AnnouncementServiceClass {
     isPublished?: boolean;
     createdBy?: string;
   }): Promise<Announcement> {
+    await this._hydrate();
     const client = SupabaseService.client;
     const now = new Date().toISOString();
     const localItem: Announcement = {
@@ -124,7 +137,7 @@ class AnnouncementServiceClass {
       isRead: false,
     };
 
-    if (client) {
+    if (client && !AuthService.isLocalSession) {
       try {
         const { data, error } = await client
           .from('announcements')
@@ -141,6 +154,8 @@ class AnnouncementServiceClass {
         if (!error && data) {
           const created = announcementFromJson(data);
           this._localAnnouncements.unshift(created);
+          await this._persist();
+          DataSync.emit('announcements');
           return created;
         }
       } catch (e) {
@@ -149,6 +164,8 @@ class AnnouncementServiceClass {
     }
 
     this._localAnnouncements.unshift(localItem);
+    await this._persist();
+    DataSync.emit('announcements');
     return localItem;
   }
 
@@ -158,6 +175,7 @@ class AnnouncementServiceClass {
     message?: string;
     isPublished?: boolean;
   }): Promise<void> {
+    await this._hydrate();
     const idx = this._localAnnouncements.findIndex((a) => a.id === params.id);
     if (idx !== -1) {
       this._localAnnouncements[idx] = {
@@ -166,10 +184,11 @@ class AnnouncementServiceClass {
         ...(params.message !== undefined ? { message: params.message } : {}),
         ...(params.isPublished !== undefined ? { isPublished: params.isPublished } : {}),
       };
+      await this._persist();
     }
 
     const client = SupabaseService.client;
-    if (client) {
+    if (client && !AuthService.isLocalSession) {
       try {
         const updates: Record<string, any> = { updated_at: new Date().toISOString() };
         if (params.title !== undefined) updates.title = params.title.trim();
@@ -180,20 +199,24 @@ class AnnouncementServiceClass {
         console.warn('[AnnouncementService] updateAnnouncement fallback:', e);
       }
     }
+    DataSync.emit('announcements');
   }
 
   async deleteAnnouncement(id: string): Promise<void> {
+    await this._hydrate();
     this._localAnnouncements = this._localAnnouncements.filter((a) => a.id !== id);
     this._localReadIds.delete(id);
+    await this._persist();
 
     const client = SupabaseService.client;
-    if (client) {
+    if (client && !AuthService.isLocalSession) {
       try {
         await client.from('announcements').delete().eq('id', id);
       } catch (e) {
         console.warn('[AnnouncementService] deleteAnnouncement fallback:', e);
       }
     }
+    DataSync.emit('announcements');
   }
 }
 

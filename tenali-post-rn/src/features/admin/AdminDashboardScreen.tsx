@@ -20,7 +20,7 @@ import { useAuth } from '../../providers/AuthContext';
 export const AdminDashboardScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { isAdmin } = useAuth();
-  const { stats, loadDashboardOverview } = useAdmin();
+  const { stats, videos, videoFolders, loadDashboardOverview, loadVideos, loadVideoFolders } = useAdmin();
   const {
     settings,
     totalMcqQuestionsCount,
@@ -36,6 +36,8 @@ export const AdminDashboardScreen: React.FC = () => {
   useEffect(() => {
     loadDashboardOverview();
     loadOverview();
+    loadVideoFolders();
+    loadVideos();
   }, []);
 
   if (!isAdmin) {
@@ -86,6 +88,20 @@ export const AdminDashboardScreen: React.FC = () => {
             icon="document-text"
             color={AppColors.successGreen}
             onPress={() => navigation.navigate('AdminNotes')}
+          />
+          <AdminStatCard
+            title="Video Lessons"
+            value={videos.length}
+            icon="logo-youtube"
+            color={AppColors.secondaryMaroon}
+            onPress={() => navigation.navigate('AdminVideos')}
+          />
+          <AdminStatCard
+            title="Topic Folders"
+            value={videoFolders.length}
+            icon="folder"
+            color={AppColors.goldBorder}
+            onPress={() => navigation.navigate('AdminVideos')}
           />
           <AdminStatCard
             title="Students"
@@ -142,6 +158,12 @@ export const AdminDashboardScreen: React.FC = () => {
             title="Study Notes & Protected PDFs"
             subtitle="Organize folders and upload PDF materials"
             onPress={() => navigation.navigate('AdminNotes')}
+          />
+          <AdminMenuRow
+            icon="videocam-outline"
+            title="Video Lessons & Topic Folders"
+            subtitle="Create topic folders, add YouTube links & import playlists"
+            onPress={() => navigation.navigate('AdminVideos')}
           />
           <AdminMenuRow
             icon="school-outline"

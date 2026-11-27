@@ -16,6 +16,7 @@ import { McqPracticeScreen } from './src/features/mcq/McqPracticeScreen';
 import { LiveTestRunnerScreen } from './src/features/live_tests/LiveTestRunnerScreen';
 import { LiveTestResultScreen } from './src/features/live_tests/LiveTestResultScreen';
 import { ProtectedPdfViewerScreen } from './src/features/notes/ProtectedPdfViewerScreen';
+import { VideoPlayerScreen } from './src/features/videos/VideoPlayerScreen';
 
 import { AdminDashboardScreen } from './src/features/admin/AdminDashboardScreen';
 import { AdminMcqScreen } from './src/features/admin/AdminMcqScreen';
@@ -26,6 +27,7 @@ import { AdminAnnouncementsScreen } from './src/features/admin/AdminAnnouncement
 import { AdminSettingsScreen } from './src/features/admin/AdminSettingsScreen';
 import { AdminAuditLogScreen } from './src/features/admin/AdminAuditLogScreen';
 import { AdminContentScreen } from './src/features/admin/AdminContentScreen';
+import { AdminVideosScreen } from './src/features/admin/AdminVideosScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -50,6 +52,7 @@ export default function App() {
             <Stack.Screen name="LiveTestRunner" component={LiveTestRunnerScreen} />
             <Stack.Screen name="LiveTestResult" component={LiveTestResultScreen} />
             <Stack.Screen name="ProtectedPdfViewer" component={ProtectedPdfViewerScreen} />
+            <Stack.Screen name="VideoPlayer" component={VideoPlayerScreen} />
 
             <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
             <Stack.Screen name="AdminMcq" component={AdminMcqScreen} />
@@ -60,6 +63,7 @@ export default function App() {
             <Stack.Screen name="AdminSettings" component={AdminSettingsScreen} />
             <Stack.Screen name="AdminAuditLog" component={AdminAuditLogScreen} />
             <Stack.Screen name="AdminContent" component={AdminContentScreen} />
+            <Stack.Screen name="AdminVideos" component={AdminVideosScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </AppProviders>

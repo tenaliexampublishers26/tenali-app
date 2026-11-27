@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,8 +8,9 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AppColors, AppStyles } from '../../core/theme';
+import { DataSync } from '../../core/utils/dataSync';
 import { useLiveTest } from '../../providers/LiveTestContext';
 import {
   isLiveTestEnded,
@@ -24,7 +25,18 @@ export const LiveTestsScreen: React.FC = () => {
 
   useEffect(() => {
     loadLiveTests();
+    return DataSync.subscribe((topic) => {
+      if (topic === 'all' || topic === 'liveTests') {
+        loadLiveTests();
+      }
+    });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadLiveTests();
+    }, [])
+  );
 
   const handleStart = async (test: LiveTest) => {
     const ok = await startLiveTest(test);

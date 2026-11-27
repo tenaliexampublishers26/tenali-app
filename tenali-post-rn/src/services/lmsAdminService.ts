@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppConstants } from '../core/constants';
+import { DataSync } from '../core/utils/dataSync';
 import { ImportParseResult } from '../core/utils/mcqImportParser';
 import { SizeFormatter } from '../core/utils/sizeFormatter';
 import {
@@ -34,6 +36,7 @@ import { AuthService } from './authService';
 import { SupabaseService } from './supabaseService';
 
 const uid = () => `id-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+const LMS_STORE_STORAGE_KEY = 'tenali_post_lms_store_v1';
 
 class LmsAdminServiceClass {
   private _settings: LmsSettings = { ...defaultLmsSettings };
@@ -54,6 +57,7 @@ class LmsAdminServiceClass {
   private _noteFolders: NoteFolder[] = [];
   private _pdfMaterials: PdfMaterial[] = [];
   private _localUsers: Record<string, any>[] = [];
+  private _hydrated = false;
 
   constructor() {
     this._seedInitialLocalData();
@@ -72,225 +76,54 @@ class LmsAdminServiceClass {
       { id: 'med-te', code: 'te', displayName: 'Telugu', isActive: true },
       { id: 'med-hi', code: 'hi', displayName: 'Hindi', isActive: true },
     ];
+  }
 
-    this._topics = [
-      {
-        id: 'topic-po-guide',
-        slug: 'post-office-guide-part-1',
-        name: 'Post Office Guide Part I',
-        category: 'Departmental Rules',
-        description: 'Organization, business hours, postage stamps, and inland postal rules.',
-        icon: 'book-open',
-        displayOrder: 1,
-        isPublished: true,
-        isActive: true,
-        chapterCount: 2,
-        questionCount: 2,
-      },
-      {
-        id: 'topic-po-manual',
-        slug: 'postal-manual-volume-v',
-        name: 'Postal Manual Volume V',
-        category: 'Departmental Rules',
-        description: 'Definitions, sorting offices, mail bags, and delivery guidelines.',
-        icon: 'book-open',
-        displayOrder: 2,
-        isPublished: true,
-        isActive: true,
-        chapterCount: 0,
-        questionCount: 0,
-      },
-    ];
+  async hydrate(): Promise<void> {
+    if (this._hydrated) return;
+    this._hydrated = true;
+    try {
+      const raw = await AsyncStorage.getItem(LMS_STORE_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed.settings) this._settings = { ...defaultLmsSettings, ...parsed.settings };
+      if (Array.isArray(parsed.topics)) this._topics = parsed.topics;
+      if (Array.isArray(parsed.chapters)) this._chapters = parsed.chapters;
+      if (Array.isArray(parsed.mediums) && parsed.mediums.length > 0) this._mediums = parsed.mediums;
+      if (Array.isArray(parsed.questionSets)) this._questionSets = parsed.questionSets;
+      if (Array.isArray(parsed.mcqQuestions)) this._mcqQuestions = parsed.mcqQuestions;
+      if (Array.isArray(parsed.liveTests)) this._liveTests = parsed.liveTests;
+      if (Array.isArray(parsed.liveTestQuestions)) this._liveTestQuestions = parsed.liveTestQuestions;
+      if (Array.isArray(parsed.liveTestSubmissions)) this._liveTestSubmissions = parsed.liveTestSubmissions;
+      if (Array.isArray(parsed.noteFolders)) this._noteFolders = parsed.noteFolders;
+      if (Array.isArray(parsed.pdfMaterials)) this._pdfMaterials = parsed.pdfMaterials;
+      if (Array.isArray(parsed.auditLogs)) this._auditLogs = parsed.auditLogs;
+    } catch (e) {
+      console.warn('[LmsAdminService] Local store hydration notice:', e);
+    }
+  }
 
-    this._chapters = [
-      {
-        id: 'chap-org',
-        topicId: 'topic-po-guide',
-        title: 'Chapter 1: Organization & Control',
-        slug: 'organization-control',
-        displayOrder: 1,
-        isPublished: true,
-        questionCount: 2,
-        publishedSetsCount: 1,
-      },
-      {
-        id: 'chap-mail',
-        topicId: 'topic-po-guide',
-        title: 'Chapter 2: Inland Mail & Weight Limits',
-        slug: 'inland-mail-weight',
-        displayOrder: 2,
-        isPublished: true,
-        questionCount: 0,
-        publishedSetsCount: 0,
-      },
-    ];
-
-    const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString();
-    this._questionSets = [
-      {
-        id: 'set-org-en-v1',
-        chapterId: 'chap-org',
-        mediumId: 'med-en',
-        version: 1,
-        status: 'published',
-        questionCount: 2,
-        createdAt: twoDaysAgo,
-        publishedAt: twoDaysAgo,
-      },
-    ];
-
-    this._mcqQuestions = [
-      {
-        id: 'q-seed-1',
-        questionSetId: 'set-org-en-v1',
-        chapterId: 'chap-org',
-        questionKey: 'Q1',
-        questionText: 'Who is the administrative head of a Postal Circle in India Post?',
-        optionA: 'Superintendent of Post Offices (SPO)',
-        optionB: 'Chief Postmaster General (CPMG)',
-        optionC: 'Director General (Posts)',
-        optionD: 'Inspector of Posts (IP)',
-        correctOption: 'B',
-        explanation: 'Each Postal Circle is headed by a Chief Postmaster General (CPMG).',
-        language: 'en',
-        difficulty: 'medium',
-        displayOrder: 1,
-        status: 'published',
-      },
-      {
-        id: 'q-seed-2',
-        questionSetId: 'set-org-en-v1',
-        chapterId: 'chap-org',
-        questionKey: 'Q2',
-        questionText: 'What is the maximum permissible weight for an Inland Letter Card?',
-        optionA: '3 grams',
-        optionB: '5 grams',
-        optionC: '10 grams',
-        optionD: '15 grams',
-        correctOption: 'B',
-        explanation: 'An Inland Letter Card has a maximum permissible weight limit of 5 grams.',
-        language: 'en',
-        difficulty: 'medium',
-        displayOrder: 2,
-        status: 'published',
-      },
-    ];
-
-    this._liveTests = [
-      {
-        id: 'lt-demo-1',
-        title: 'All-India Postal MTS Weekly Mock Test',
-        description: 'Untimed departmental live mock test covering PO Guide Part I.',
-        testDate: new Date().toISOString(),
-        status: 'published',
-        questionCount: 2,
-        answersReleased: false,
-        attemptsCount: 1,
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-      },
-    ];
-
-    this._liveTestQuestions = [
-      {
-        id: 'ltq-1',
-        testId: 'lt-demo-1',
-        questionKey: 'Q1',
-        questionText: 'Which article of the Indian Constitution deals with the Right to Equality?',
-        optionA: 'Article 12',
-        optionB: 'Article 14',
-        optionC: 'Article 19',
-        optionD: 'Article 21',
-        correctOption: 'B',
-        explanation: 'Article 14 guarantees equality before law and equal protection of laws.',
-        displayOrder: 1,
-      },
-      {
-        id: 'ltq-2',
-        testId: 'lt-demo-1',
-        questionKey: 'Q2',
-        questionText: 'How many Postal Circles exist in India Post (excluding APS)?',
-        optionA: '21',
-        optionB: '22',
-        optionC: '23',
-        optionD: '24',
-        correctOption: 'C',
-        explanation: 'India is divided into 23 Postal Circles.',
-        displayOrder: 2,
-      },
-    ];
-
-    this._liveTestSubmissions = [
-      {
-        id: 'sub-demo-1',
-        testId: 'lt-demo-1',
-        userId: 'example-student-01',
-        studentName: 'Example Candidate',
-        phoneNumber: '9876543210',
-        location: 'Tenali, AP',
-        email: 'student@example.com',
-        totalQuestions: 2,
-        attemptedCount: 2,
-        correctCount: 2,
-        wrongCount: 0,
-        marksObtained: 2,
-        percentage: 100.0,
-        answers: { 'ltq-1': 'B', 'ltq-2': 'C' },
-        submittedAt: new Date(Date.now() - 3 * 3600000).toISOString(),
-        rank: 1,
-      },
-    ];
-
-    this._noteFolders = [
-      {
-        id: 'nf-root-1',
-        name: 'PO Guide Part I',
-        parentId: null,
-        createdAt: twoDaysAgo,
-        updatedAt: twoDaysAgo,
-      },
-      {
-        id: 'nf-sub-1',
-        name: 'Clause Summaries',
-        parentId: 'nf-root-1',
-        createdAt: twoDaysAgo,
-        updatedAt: twoDaysAgo,
-      },
-    ];
-
-    this._localUsers = [
-      {
-        id: 'example-student-01',
-        name: 'Example Candidate',
-        email: AppConstants.exampleLoginEmail,
-        phone: '9876543210',
-        role: 'customer',
-        created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
-      },
-      {
-        id: 'stu-02',
-        name: 'Priya Sharma',
-        email: 'priya.sharma@example.com',
-        phone: '9123456780',
-        role: 'customer',
-        created_at: new Date(Date.now() - 6 * 86400000).toISOString(),
-      },
-    ];
-
-    this._auditLogs = [
-      {
-        id: 'audit-init-1',
-        adminId: 'admin-01',
-        adminName: 'Tenali Postal Admin',
-        adminEmail: AppConstants.authorizedAdminEmail,
-        actionType: 'INITIALIZE_LMS',
-        targetType: 'settings',
-        targetName: 'Global LMS Controls',
-        newValue: { mcq_enabled: 'true', live_test_enabled: 'true' },
-        ipAddress: 'mobile-app',
-        locationName: 'Tenali, Andhra Pradesh, India',
-        createdAt: new Date(Date.now() - 6 * 3600000).toISOString(),
-      },
-    ];
+  private async _persist(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(
+        LMS_STORE_STORAGE_KEY,
+        JSON.stringify({
+          settings: this._settings,
+          topics: this._topics,
+          chapters: this._chapters,
+          mediums: this._mediums,
+          questionSets: this._questionSets,
+          mcqQuestions: this._mcqQuestions,
+          liveTests: this._liveTests,
+          liveTestQuestions: this._liveTestQuestions,
+          liveTestSubmissions: this._liveTestSubmissions,
+          noteFolders: this._noteFolders,
+          pdfMaterials: this._pdfMaterials,
+          auditLogs: this._auditLogs.slice(0, 100),
+        })
+      );
+    } catch (e) {
+      console.warn('[LmsAdminService] Local store persist notice:', e);
+    }
   }
 
   private _recordLocalAudit(params: {
@@ -319,11 +152,13 @@ class LmsAdminServiceClass {
 
   // 1. Settings & Audit
   async getSettings(): Promise<LmsSettings> {
+    await this.hydrate();
     if (this._hasLiveAuthSession && SupabaseService.client) {
       try {
         const { data } = await SupabaseService.client.from('settings').select('key, value');
         if (data) {
           this._settings = lmsSettingsFromKeyValueRows(data);
+          await this._persist();
           return this._settings;
         }
       } catch {
@@ -334,6 +169,7 @@ class LmsAdminServiceClass {
   }
 
   async toggleMcqEnabled(enabled: boolean): Promise<void> {
+    await this.hydrate();
     const prev = { mcq_enabled: String(this._settings.mcqEnabled) };
     if (this._hasLiveAuthSession && SupabaseService.client) {
       try {
@@ -353,9 +189,12 @@ class LmsAdminServiceClass {
       previousValue: prev,
       newValue: { mcq_enabled: String(enabled) },
     });
+    await this._persist();
+    DataSync.emit('settings');
   }
 
   async toggleLiveTestEnabled(enabled: boolean): Promise<void> {
+    await this.hydrate();
     const prev = { live_test_enabled: String(this._settings.liveTestEnabled) };
     if (this._hasLiveAuthSession && SupabaseService.client) {
       try {
@@ -375,9 +214,12 @@ class LmsAdminServiceClass {
       previousValue: prev,
       newValue: { live_test_enabled: String(enabled) },
     });
+    await this._persist();
+    DataSync.emit('settings');
   }
 
   async updateSettings(next: LmsSettings): Promise<void> {
+    await this.hydrate();
     const prev = { ...this._settings };
     this._settings = next;
     this._recordLocalAudit({
@@ -387,6 +229,8 @@ class LmsAdminServiceClass {
       previousValue: prev,
       newValue: next,
     });
+    await this._persist();
+    DataSync.emit('settings');
   }
 
   async updateAdminProfile(name: string, phone: string, _newPassword?: string): Promise<void> {
@@ -421,13 +265,15 @@ class LmsAdminServiceClass {
 
   // 2. MCQ Hierarchy
   async getTopics(publishedOnly = false): Promise<McqTopic[]> {
+    await this.hydrate();
     if (this._hasLiveAuthSession && SupabaseService.client) {
       try {
         let q = SupabaseService.client.from('mcq_topics').select().order('display_order');
         if (publishedOnly) q = q.eq('is_published', true);
-        const { data } = await q;
-        if (data && data.length > 0) {
+        const { data, error } = await q;
+        if (!error && Array.isArray(data)) {
           this._topics = data.map(mcqTopicFromJson);
+          await this._persist();
         }
       } catch {
         // fallback
@@ -451,6 +297,7 @@ class LmsAdminServiceClass {
     displayOrder?: number;
     isPublished?: boolean;
   }): Promise<McqTopic> {
+    await this.hydrate();
     const topic: McqTopic = {
       id: uid(),
       slug: SizeFormatter.slugify(params.name),
@@ -471,10 +318,13 @@ class LmsAdminServiceClass {
       targetType: 'mcq_topic',
       targetName: topic.name,
     });
+    await this._persist();
+    DataSync.emit('mcq');
     return topic;
   }
 
   async updateTopic(topic: McqTopic): Promise<void> {
+    await this.hydrate();
     const idx = this._topics.findIndex((t) => t.id === topic.id);
     if (idx !== -1) this._topics[idx] = topic;
     this._recordLocalAudit({
@@ -482,9 +332,12 @@ class LmsAdminServiceClass {
       targetType: 'mcq_topic',
       targetName: topic.name,
     });
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async deleteTopicTree(topicId: string): Promise<void> {
+    await this.hydrate();
     const chIds = this._chapters.filter((c) => c.topicId === topicId).map((c) => c.id);
     this._mcqQuestions = this._mcqQuestions.filter((q) => !chIds.includes(q.chapterId ?? ''));
     this._questionSets = this._questionSets.filter((s) => !chIds.includes(s.chapterId));
@@ -495,9 +348,12 @@ class LmsAdminServiceClass {
       targetType: 'mcq_topic',
       targetName: topicId,
     });
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async getChapters(topicId: string, publishedOnly = false): Promise<McqChapter[]> {
+    await this.hydrate();
     return this._chapters
       .filter((c) => c.topicId === topicId && (!publishedOnly || c.isPublished))
       .map((c) => {
@@ -516,6 +372,7 @@ class LmsAdminServiceClass {
     displayOrder?: number;
     isPublished?: boolean;
   }): Promise<McqChapter> {
+    await this.hydrate();
     const chapter: McqChapter = {
       id: uid(),
       topicId: params.topicId,
@@ -533,25 +390,35 @@ class LmsAdminServiceClass {
       targetType: 'mcq_chapter',
       targetName: chapter.title,
     });
+    await this._persist();
+    DataSync.emit('mcq');
     return chapter;
   }
 
   async updateChapter(chapter: McqChapter): Promise<void> {
+    await this.hydrate();
     const idx = this._chapters.findIndex((c) => c.id === chapter.id);
     if (idx !== -1) this._chapters[idx] = chapter;
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async deleteChapter(chapterId: string): Promise<void> {
+    await this.hydrate();
     this._mcqQuestions = this._mcqQuestions.filter((q) => q.chapterId !== chapterId);
     this._questionSets = this._questionSets.filter((s) => s.chapterId !== chapterId);
     this._chapters = this._chapters.filter((c) => c.id !== chapterId);
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async getMediums(): Promise<McqMedium[]> {
+    await this.hydrate();
     return [...this._mediums];
   }
 
   async createMedium(code: string, displayName: string): Promise<McqMedium> {
+    await this.hydrate();
     const m: McqMedium = {
       id: `med-${code.toLowerCase()}`,
       code: code.toLowerCase(),
@@ -559,6 +426,8 @@ class LmsAdminServiceClass {
       isActive: true,
     };
     this._mediums.push(m);
+    await this._persist();
+    DataSync.emit('mcq');
     return m;
   }
 
@@ -566,6 +435,7 @@ class LmsAdminServiceClass {
     chapterId: string,
     publishedOnly = false
   ): Promise<McqQuestionSet[]> {
+    await this.hydrate();
     return this._questionSets
       .filter((s) => s.chapterId === chapterId && (!publishedOnly || s.status === 'published'))
       .map((s) => ({
@@ -575,6 +445,7 @@ class LmsAdminServiceClass {
   }
 
   async attachChapterLanguage(chapterId: string, mediumId: string): Promise<McqQuestionSet> {
+    await this.hydrate();
     const existing = this._questionSets.find(
       (s) => s.chapterId === chapterId && s.mediumId === mediumId
     );
@@ -590,38 +461,72 @@ class LmsAdminServiceClass {
       publishedAt: new Date().toISOString(),
     };
     this._questionSets.push(set);
+    await this._persist();
+    DataSync.emit('mcq');
     return set;
   }
 
   async deleteChapterLanguage(chapterId: string, mediumId: string): Promise<void> {
+    await this.hydrate();
     const setIds = this._questionSets
       .filter((s) => s.chapterId === chapterId && s.mediumId === mediumId)
       .map((s) => s.id);
     this._mcqQuestions = this._mcqQuestions.filter((q) => !setIds.includes(q.questionSetId));
     this._questionSets = this._questionSets.filter((s) => !setIds.includes(s.id));
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async getQuestionsForSet(setId: string): Promise<LmsMcqQuestion[]> {
+    await this.hydrate();
     return this._mcqQuestions
       .filter((q) => q.questionSetId === setId)
       .sort((a, b) => a.displayOrder - b.displayOrder);
   }
 
+  async getPublishedQuestionsForChapter(
+    chapterId: string,
+    languageCode: string
+  ): Promise<LmsMcqQuestion[]> {
+    await this.hydrate();
+    const normLang = languageCode.toLowerCase();
+    return this._mcqQuestions
+      .filter(
+        (q) =>
+          q.chapterId === chapterId &&
+          q.language.toLowerCase() === normLang &&
+          q.status === 'published'
+      )
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
   async addMcqQuestion(q: LmsMcqQuestion): Promise<void> {
+    await this.hydrate();
     this._mcqQuestions.push({ ...q, id: q.id || uid() });
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async updateMcqQuestion(q: LmsMcqQuestion): Promise<void> {
+    await this.hydrate();
     const idx = this._mcqQuestions.findIndex((x) => x.id === q.id);
     if (idx !== -1) this._mcqQuestions[idx] = q;
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async deleteMcqQuestion(questionId: string, _setId: string): Promise<void> {
+    await this.hydrate();
     this._mcqQuestions = this._mcqQuestions.filter((q) => q.id !== questionId);
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async clearMcqQuestionSet(setId: string): Promise<void> {
+    await this.hydrate();
     this._mcqQuestions = this._mcqQuestions.filter((q) => q.questionSetId !== setId);
+    await this._persist();
+    DataSync.emit('mcq');
   }
 
   async importMcqQuestions(params: {
@@ -635,6 +540,7 @@ class LmsAdminServiceClass {
     publishImmediately: boolean;
     replaceExisting: boolean;
   }): Promise<McqQuestionSet> {
+    await this.hydrate();
     let targetSet = this._questionSets.find(
       (s) => s.chapterId === params.chapterId && s.mediumId === params.mediumId
     );
@@ -682,11 +588,14 @@ class LmsAdminServiceClass {
       targetType: 'mcq_set',
       targetName: `${params.fileName} (${params.parsed.validQuestions.length} Qs)`,
     });
+    await this._persist();
+    DataSync.emit('mcq');
     return targetSet;
   }
 
   // 3. Live Tests
   async getLiveTests(): Promise<LmsLiveTest[]> {
+    await this.hydrate();
     return this._liveTests.map((t) => ({
       ...t,
       questionCount: this._liveTestQuestions.filter((q) => q.testId === t.id).length,
@@ -700,6 +609,7 @@ class LmsAdminServiceClass {
     testDate: string;
     status?: string;
   }): Promise<LmsLiveTest> {
+    await this.hydrate();
     const t: LmsLiveTest = {
       id: uid(),
       title: params.title.trim(),
@@ -712,34 +622,50 @@ class LmsAdminServiceClass {
       createdAt: new Date().toISOString(),
     };
     this._liveTests.unshift(t);
+    await this._persist();
+    DataSync.emit('liveTests');
     return t;
   }
 
   async updateLiveTest(test: LmsLiveTest): Promise<void> {
+    await this.hydrate();
     const idx = this._liveTests.findIndex((t) => t.id === test.id);
     if (idx !== -1) this._liveTests[idx] = test;
+    await this._persist();
+    DataSync.emit('liveTests');
   }
 
   async deleteLiveTest(testId: string): Promise<void> {
+    await this.hydrate();
     this._liveTests = this._liveTests.filter((t) => t.id !== testId);
     this._liveTestQuestions = this._liveTestQuestions.filter((q) => q.testId !== testId);
+    await this._persist();
+    DataSync.emit('liveTests');
   }
 
   async getLiveTestQuestions(testId: string): Promise<LmsLiveTestQuestion[]> {
+    await this.hydrate();
     return this._liveTestQuestions
       .filter((q) => q.testId === testId)
       .sort((a, b) => a.displayOrder - b.displayOrder);
   }
 
   async addLiveTestQuestion(q: LmsLiveTestQuestion): Promise<void> {
+    await this.hydrate();
     this._liveTestQuestions.push({ ...q, id: q.id || uid() });
+    await this._persist();
+    DataSync.emit('liveTests');
   }
 
   async deleteLiveTestQuestion(questionId: string): Promise<void> {
+    await this.hydrate();
     this._liveTestQuestions = this._liveTestQuestions.filter((q) => q.id !== questionId);
+    await this._persist();
+    DataSync.emit('liveTests');
   }
 
   async getLiveTestSubmissions(testId: string): Promise<LmsLiveTestSubmission[]> {
+    await this.hydrate();
     return this._liveTestSubmissions
       .filter((s) => s.testId === testId)
       .sort((a, b) => b.marksObtained - a.marksObtained)
@@ -748,10 +674,12 @@ class LmsAdminServiceClass {
 
   // 4. Notes & Folders
   async getNoteFolders(): Promise<NoteFolder[]> {
+    await this.hydrate();
     return [...this._noteFolders];
   }
 
   async createNoteFolder(name: string, parentId?: string | null): Promise<NoteFolder> {
+    await this.hydrate();
     const now = new Date().toISOString();
     const folder: NoteFolder = {
       id: uid(),
@@ -761,28 +689,40 @@ class LmsAdminServiceClass {
       updatedAt: now,
     };
     this._noteFolders.push(folder);
+    await this._persist();
+    DataSync.emit('notes');
     return folder;
   }
 
   async deleteNoteFolder(folderId: string): Promise<void> {
+    await this.hydrate();
     this._noteFolders = this._noteFolders.filter((f) => f.id !== folderId);
     this._pdfMaterials = this._pdfMaterials.map((n) =>
       n.folderId === folderId ? { ...n, folderId: null } : n
     );
+    await this._persist();
+    DataSync.emit('notes');
   }
 
   async getNotes(): Promise<PdfMaterial[]> {
+    await this.hydrate();
     return [...this._pdfMaterials];
   }
 
   async createPdfMaterial(note: PdfMaterial): Promise<PdfMaterial> {
+    await this.hydrate();
     const created = { ...note, id: note.id || uid() };
     this._pdfMaterials.unshift(created);
+    await this._persist();
+    DataSync.emit('notes');
     return created;
   }
 
   async deletePdfMaterial(noteId: string): Promise<void> {
+    await this.hydrate();
     this._pdfMaterials = this._pdfMaterials.filter((n) => n.id !== noteId);
+    await this._persist();
+    DataSync.emit('notes');
   }
 
   // 5. Students Directory

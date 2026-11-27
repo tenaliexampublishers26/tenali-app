@@ -7,6 +7,7 @@ import {
   Question,
   StudentRecord,
   StudyNote,
+  VideoFolder,
   VideoLesson,
 } from '../models';
 import { AdminService, AdminStats } from '../services/adminService';
@@ -18,6 +19,7 @@ interface AdminContextValue {
   chapters: Chapter[];
   students: StudentRecord[];
   liveTests: LiveTest[];
+  videoFolders: VideoFolder[];
   videos: VideoLesson[];
   notes: StudyNote[];
   auditLogs: AdminAuditLog[];
@@ -40,8 +42,12 @@ interface AdminContextValue {
   deleteExam: (id: string, adminEmail: string) => Promise<void>;
   saveChapter: (chapter: Chapter, adminEmail: string) => Promise<void>;
   deleteChapter: (id: string, adminEmail: string) => Promise<void>;
+  loadVideoFolders: (examId?: string) => Promise<void>;
+  saveVideoFolder: (f: VideoFolder, adminEmail: string) => Promise<void>;
+  deleteVideoFolder: (id: string, adminEmail: string) => Promise<void>;
   loadVideos: (examId?: string) => Promise<void>;
   saveVideo: (v: VideoLesson, adminEmail: string) => Promise<void>;
+  saveVideosBatch: (vs: VideoLesson[], adminEmail: string) => Promise<void>;
   deleteVideo: (id: string, adminEmail: string) => Promise<void>;
   loadNotes: (examId?: string) => Promise<void>;
   saveNote: (n: StudyNote, adminEmail: string) => Promise<void>;
@@ -70,6 +76,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [liveTests, setLiveTests] = useState<LiveTest[]>([]);
+  const [videoFolders, setVideoFolders] = useState<VideoFolder[]>([]);
   const [videos, setVideos] = useState<VideoLesson[]>([]);
   const [notes, setNotes] = useState<StudyNote[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
@@ -171,12 +178,36 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setChapters(await AdminService.getChapters());
   };
 
+  const loadVideoFolders = async (examId?: string) => {
+    setVideoFolders(await AdminService.getVideoFolders(examId));
+  };
+
+  const saveVideoFolder = async (f: VideoFolder, adminEmail: string) => {
+    await AdminService.saveVideoFolder(f, adminEmail);
+    setVideoFolders(await AdminService.getVideoFolders());
+  };
+
+  const deleteVideoFolder = async (id: string, adminEmail: string) => {
+    await AdminService.deleteVideoFolder(id, adminEmail);
+    const [folders, vids] = await Promise.all([
+      AdminService.getVideoFolders(),
+      AdminService.getVideos(),
+    ]);
+    setVideoFolders(folders);
+    setVideos(vids);
+  };
+
   const loadVideos = async (examId?: string) => {
     setVideos(await AdminService.getVideos(examId));
   };
 
   const saveVideo = async (v: VideoLesson, adminEmail: string) => {
     await AdminService.saveVideo(v, adminEmail);
+    setVideos(await AdminService.getVideos());
+  };
+
+  const saveVideosBatch = async (vs: VideoLesson[], adminEmail: string) => {
+    await AdminService.saveVideosBatch(vs, adminEmail);
     setVideos(await AdminService.getVideos());
   };
 
@@ -239,6 +270,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         chapters,
         students,
         liveTests,
+        videoFolders,
         videos,
         notes,
         auditLogs,
@@ -254,8 +286,12 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         deleteExam,
         saveChapter,
         deleteChapter,
+        loadVideoFolders,
+        saveVideoFolder,
+        deleteVideoFolder,
         loadVideos,
         saveVideo,
+        saveVideosBatch,
         deleteVideo,
         loadNotes,
         saveNote,

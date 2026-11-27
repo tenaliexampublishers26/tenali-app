@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,9 +8,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AppColors, AppStyles } from '../../core/theme';
 import { AppConstants } from '../../core/constants';
+import { DataSync } from '../../core/utils/dataSync';
 import { DataService } from '../../services/dataService';
 import { StudyNote } from '../../models';
 import { useLmsAdmin } from '../../providers/LmsAdminContext';
@@ -22,25 +23,36 @@ export const NotesScreen: React.FC = () => {
   const [notes, setNotes] = useState<StudyNote[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadOverview();
-  }, []);
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [list] = await Promise.all([
+        DataService.getNotes(selectedExamId),
+        loadOverview(),
+      ]);
+      setNotes(list);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedExamId]);
 
   useEffect(() => {
-    let active = true;
-    const load = async () => {
-      setLoading(true);
-      const list = await DataService.getNotes(selectedExamId);
-      if (active) {
-        setNotes(list);
-        setLoading(false);
+    loadAll();
+  }, [loadAll]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAll();
+    }, [loadAll])
+  );
+
+  useEffect(() => {
+    return DataSync.subscribe((topic) => {
+      if (topic === 'all' || topic === 'notes') {
+        loadAll();
       }
-    };
-    load();
-    return () => {
-      active = false;
-    };
-  }, [selectedExamId]);
+    });
+  }, [loadAll]);
 
   const combinedNotes: StudyNote[] = [
     ...notes,

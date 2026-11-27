@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,8 +8,9 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AppColors, AppStyles } from '../../core/theme';
+import { DataSync } from '../../core/utils/dataSync';
 import { useMcq } from '../../providers/McqContext';
 import { Exam } from '../../models';
 
@@ -19,7 +20,18 @@ export const ExamListScreen: React.FC = () => {
 
   useEffect(() => {
     loadExams();
+    return DataSync.subscribe((topic) => {
+      if (topic === 'all' || topic === 'exams' || topic === 'mcq') {
+        loadExams();
+      }
+    });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadExams();
+    }, [])
+  );
 
   const handleOpenExam = async (exam: Exam) => {
     await selectExam(exam);
