@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Tenali Post",
+    "slug": "tenali-post",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/tenali_post_logo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/tenali_post_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B2545"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tenaliexam.tenalipost"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/tenali_post_logo.png",
+        "backgroundColor": "#0B2545"
+      },
+      "package": "com.tenaliexam.tenalipost"
+    },
+    "web": {
+      "favicon": "./assets/images/tenali_post_logo.png"
+    }
+  }
+}
